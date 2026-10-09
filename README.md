@@ -1,2 +1,6 @@
 # Not-Quite-My-Tempo
-Una serie de herramientas de medición para análisis de algoritmos y/o procesos, disponible para múltiples lenguajes de programación.
+
+<div align="center">
+<img src = "assets/main.jpg" alt="Not Quite My Tempo" width="746" height="413"/>
+</div>
+Una serie de herramientas de medición para análisis de algoritmos y/o procesos.
