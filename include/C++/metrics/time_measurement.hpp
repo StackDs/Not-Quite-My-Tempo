@@ -1,6 +1,7 @@
 #pragma once
 
 #include <chrono>
+#include <functional>
 
 namespace ntq {
 
@@ -28,21 +29,21 @@ struct ElapsedMeasurements {
 class TimeMeasurement {
 public:
   // Devuelve la resolución reportada por Linux para CLOCK_MONOTONIC, en
-  // nanosegundos. En las implementaciones Linux habituales, steady_clock usa
-  // este reloj.
+  // nanosegundos. El mismo reloj se usa para medir el wall-clock.
   static std::chrono::nanoseconds reported_clock_resolution();
+
+  // Ejecuta el algoritmo en un proceso hijo y devuelve sus métricas. El
+  // lanzador debe ser monohilo al invocar este método; los cambios en memoria
+  // hechos por el hijo no se reflejan en el proceso padre.
+  static TimeMeasurement measure_in_isolated_process(
+      const std::function<void()> &algorithm);
 
   void start();
   void stop();
   void elapsed();
   ElapsedMeasurements obtain_elapsed(TimeUnit unit) const;
 
-  /*Se usa un reloj monotonico para medir el tiempo transcurrido, lo que
-  garantiza que las mediciones no se vean afectadas por cambios en el reloj
-  del sistema */
 private:
-  using Clock = std::chrono::steady_clock;
-
   // Estructura que representa una instantánea de los recursos del sistema.
   struct ResourceSnapshot {
     long user_seconds{0};
@@ -57,8 +58,8 @@ private:
   // tiempo de CPU y los cambios de contexto.
   static ResourceSnapshot capture_resources();
 
-  Clock::time_point wall_start_{};
-  Clock::time_point wall_end_{};
+  std::chrono::nanoseconds wall_start_{};
+  std::chrono::nanoseconds wall_end_{};
   ResourceSnapshot resources_start_{};
   ResourceSnapshot resources_end_{};
   ElapsedMeasurements elapsed_nanoseconds_{};

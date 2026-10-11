@@ -3,17 +3,25 @@
 Archivo documentado: `src/C++/metrics/time_measurement.cpp`  
 API pública relacionada: [`time_measurement.hpp.md`](time_measurement.hpp.md)
 
-La implementación combina `std::chrono::steady_clock` para tiempo de pared con
+La implementación usa `clock_gettime(CLOCK_MONOTONIC)` para el tiempo de pared y
 `getrusage(RUSAGE_SELF)` para las métricas de CPU y los cambios de contexto del
-proceso. `getrusage` reporta tiempo de CPU en segundos y microsegundos. La fase
-`elapsed()` convierte y conserva los deltas de tiempo en nanosegundos; cada
-llamada a `obtain_elapsed(unit)` convierte los tres tiempos juntos a la unidad
-solicitada.
+proceso. `getrusage` reporta tiempo de CPU en segundos y microsegundos. Los
+instantes de pared se toman antes y después del snapshot de recursos; su punto
+medio aproxima el instante del snapshot y reduce el desfase entre métricas. La
+fase `elapsed()` conserva los deltas en nanosegundos; cada llamada a
+`obtain_elapsed(unit)` convierte los tres tiempos juntos a la unidad solicitada.
 
 `reported_clock_resolution()` consulta `clock_getres(CLOCK_MONOTONIC)` y devuelve
-la resolución reportada por Linux en nanosegundos. En las implementaciones Linux
-habituales, `steady_clock` utiliza `CLOCK_MONOTONIC`; la consulta no calibra la
-granularidad observada empíricamente.
+la resolución reportada por Linux en nanosegundos. Es el mismo reloj usado para
+el wall-clock; la consulta no calibra la granularidad observada empíricamente.
+
+`measure_in_isolated_process()` crea un hijo con `fork()`, inicia la medición,
+ejecuta el callback y envía al padre mediante un pipe los deltas guardados en
+nanosegundos. Devuelve una instancia con esos deltas, que puede convertirse a
+cualquier unidad mediante `obtain_elapsed(unit)`. El callback debe ejecutarse
+desde un lanzador monohilo. Los cambios de memoria del hijo no son visibles para
+el padre. Si el callback lanza una excepción o la medición falla, el hijo
+termina con error y el padre recibe `std::runtime_error`.
 
 ## Funciones auxiliares
 
@@ -28,6 +36,10 @@ granularidad observada empíricamente.
 - `reported_clock_resolution()`: consulta la resolución reportada para
   `CLOCK_MONOTONIC`. Si `clock_getres` falla, lanza `std::system_error` con el
   código de `errno`.
+- `measure_in_isolated_process(callback)`: ejecuta el callback en un proceso hijo
+  y devuelve una instancia lista para consultar. Envía los deltas en nanosegundos
+  por un pipe y usa `waitpid` para recolectar el proceso hijo. Si el callback
+  falla, el error se reporta en el padre como `std::runtime_error`.
 - `capture_resources()`: llama a `getrusage(RUSAGE_SELF)` y copia los tiempos de
   usuario y sistema, junto con los contadores voluntario e involuntario, en un
   snapshot. Si la llamada falla, lanza `std::system_error` con el código de

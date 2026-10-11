@@ -1,13 +1,68 @@
 #include "metrics/time_measurement.hpp"
 
 #include <cerrno>
+#include <cstddef>
 #include <stdexcept>
 #include <sys/resource.h>
+#include <sys/wait.h>
 #include <system_error>
 #include <time.h>
+#include <type_traits>
+#include <unistd.h>
 
 namespace ntq {
 namespace {
+
+std::chrono::nanoseconds monotonic_now() {
+  timespec timestamp{};
+  if (clock_gettime(CLOCK_MONOTONIC, &timestamp) == -1) {
+    throw std::system_error(errno, std::generic_category(),
+                            "No fue posible leer CLOCK_MONOTONIC");
+  }
+
+  return std::chrono::seconds{timestamp.tv_sec} +
+         std::chrono::nanoseconds{timestamp.tv_nsec};
+}
+
+bool write_all(int descriptor, const void *data, std::size_t size) {
+  const auto *bytes = static_cast<const char *>(data);
+  std::size_t written = 0;
+  while (written < size) {
+    const ssize_t result = write(descriptor, bytes + written, size - written);
+    if (result == -1) {
+      if (errno == EINTR) {
+        continue;
+      }
+      return false;
+    }
+    if (result == 0) {
+      return false;
+    }
+    written += static_cast<std::size_t>(result);
+  }
+  return true;
+}
+
+bool read_all(int descriptor, void *data, std::size_t size, int &error) {
+  auto *bytes = static_cast<char *>(data);
+  std::size_t received = 0;
+  while (received < size) {
+    const ssize_t result = read(descriptor, bytes + received, size - received);
+    if (result == -1) {
+      if (errno == EINTR) {
+        continue;
+      }
+      error = errno;
+      return false;
+    }
+    if (result == 0) {
+      error = 0;
+      return false;
+    }
+    received += static_cast<std::size_t>(result);
+  }
+  return true;
+}
 
 // Funcion auxliar para convertir segundos y microsegundos a nanosegundos
 long double to_nanoseconds(long seconds, long microseconds) {
@@ -49,6 +104,88 @@ std::chrono::nanoseconds TimeMeasurement::reported_clock_resolution() {
          std::chrono::nanoseconds{resolution.tv_nsec};
 }
 
+TimeMeasurement TimeMeasurement::measure_in_isolated_process(
+    const std::function<void()> &algorithm) {
+  if (!algorithm) {
+    throw std::invalid_argument("El algoritmo a medir no puede estar vacío");
+  }
+
+  int result_pipe[2];
+  if (pipe(result_pipe) == -1) {
+    throw std::system_error(errno, std::generic_category(),
+                            "No fue posible crear el canal de resultados");
+  }
+
+  const pid_t child = fork();
+  if (child == -1) {
+    const int error = errno;
+    close(result_pipe[0]);
+    close(result_pipe[1]);
+    throw std::system_error(error, std::generic_category(),
+                            "No fue posible crear el proceso de medición");
+  }
+
+  if (child == 0) {
+    close(result_pipe[0]);
+    try {
+      TimeMeasurement measurement;
+      measurement.start();
+      algorithm();
+      measurement.stop();
+      measurement.elapsed();
+      const ElapsedMeasurements result = measurement.elapsed_nanoseconds_;
+      const bool sent = write_all(result_pipe[1], &result, sizeof(result));
+      close(result_pipe[1]);
+      _exit(sent ? 0 : 125);
+    } catch (...) {
+      close(result_pipe[1]);
+      _exit(126);
+    }
+  }
+
+  close(result_pipe[1]);
+  ElapsedMeasurements elapsed_nanoseconds{};
+  int read_error = 0;
+  const bool received =
+      read_all(result_pipe[0], &elapsed_nanoseconds,
+               sizeof(elapsed_nanoseconds), read_error);
+  close(result_pipe[0]);
+
+  int child_status = 0;
+  pid_t waited;
+  do {
+    waited = waitpid(child, &child_status, 0);
+  } while (waited == -1 && errno == EINTR);
+  if (waited == -1) {
+    throw std::system_error(errno, std::generic_category(),
+                            "No fue posible esperar al proceso de medición");
+  }
+
+  if (!received) {
+    if (WIFEXITED(child_status) && WEXITSTATUS(child_status) == 125) {
+      throw std::system_error(EPIPE, std::generic_category(),
+                              "No fue posible enviar los resultados medidos");
+    }
+    if (!WIFEXITED(child_status) || WEXITSTATUS(child_status) != 0) {
+      throw std::runtime_error(
+          "El algoritmo o la medición falló en el proceso aislado");
+    }
+    throw std::system_error(read_error == 0 ? EIO : read_error,
+                            std::generic_category(),
+                            "No fue posible recibir los resultados medidos");
+  }
+  if (!WIFEXITED(child_status) || WEXITSTATUS(child_status) != 0) {
+    throw std::runtime_error(
+        "El proceso aislado terminó con error después de medir");
+  }
+
+  TimeMeasurement measurement;
+  measurement.elapsed_nanoseconds_ = elapsed_nanoseconds;
+  measurement.has_stopped_ = true;
+  measurement.has_elapsed_ = true;
+  return measurement;
+}
+
 // Capturamos los recursos del proceso utilizando getrusage.
 TimeMeasurement::ResourceSnapshot TimeMeasurement::capture_resources() {
   rusage usage{};
@@ -74,11 +211,12 @@ void TimeMeasurement::start() {
   has_stopped_ = false;
   has_elapsed_ = false;
 
+  const std::chrono::nanoseconds wall_before = monotonic_now();
   const ResourceSnapshot resources = capture_resources();
-  const Clock::time_point wall_time = Clock::now();
+  const std::chrono::nanoseconds wall_after = monotonic_now();
 
   resources_start_ = resources;
-  wall_start_ = wall_time;
+  wall_start_ = wall_before + (wall_after - wall_before) / 2;
   is_running_ = true;
 }
 
@@ -89,12 +227,14 @@ void TimeMeasurement::stop() {
         "No se puede detener la medición de tiempo antes de iniciarla");
   }
 
-  // Capturamos los recursos finales y el tiempo final
+  // Se usa el punto medio del intervalo que rodea el snapshot para aproximar
+  // mejor el instante en que se capturaron los recursos.
+  const std::chrono::nanoseconds wall_before = monotonic_now();
   const ResourceSnapshot resources = capture_resources();
-  const Clock::time_point wall_time = Clock::now();
+  const std::chrono::nanoseconds wall_after = monotonic_now();
 
   resources_end_ = resources;
-  wall_end_ = wall_time;
+  wall_end_ = wall_before + (wall_after - wall_before) / 2;
   is_running_ = false;
   has_stopped_ = true;
   has_elapsed_ = false;
@@ -107,8 +247,7 @@ void TimeMeasurement::elapsed() {
                            "de detener la medición de tiempo");
   }
 
-  const auto wall_duration =
-      std::chrono::duration<long double, std::nano>(wall_end_ - wall_start_);
+  const auto wall_duration = wall_end_ - wall_start_;
 
   const long user_seconds =
       resources_end_.user_seconds - resources_start_.user_seconds;

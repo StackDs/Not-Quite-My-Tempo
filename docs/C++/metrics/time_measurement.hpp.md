@@ -11,10 +11,10 @@ Linux.
 ## Resolución del reloj
 
 `TimeMeasurement::reported_clock_resolution()` devuelve, en nanosegundos, la
-resolución que Linux reporta para `CLOCK_MONOTONIC`. En las implementaciones
-Linux habituales, `std::chrono::steady_clock` se apoya en ese reloj. Este valor
-describe la resolución reportada por el sistema; no garantiza la precisión de
-cada medición ni mide empíricamente la granularidad observada.
+resolución que Linux reporta para `CLOCK_MONOTONIC`, el mismo reloj utilizado
+para capturar el wall-clock. Este valor describe la resolución reportada por el
+sistema; no garantiza la precisión de cada medición ni mide empíricamente la
+granularidad observada.
 
 ## `TimeUnit`
 
@@ -57,6 +57,27 @@ La medición se usa en este orden:
 4. `elapsed()` calcula y guarda las diferencias de los snapshots.
 5. `obtain_elapsed(unit)` obtiene los resultados en la unidad deseada.
 
+Para medir en un proceso dedicado se puede usar
+`TimeMeasurement::measure_in_isolated_process(callback)`. El método crea un hijo
+con `fork()` y devuelve un `TimeMeasurement` listo para consultar. Los tiempos se
+conservan internamente en nanosegundos y se convierten al pedir el resultado:
+
+```cpp
+const ntq::TimeMeasurement isolated =
+    ntq::TimeMeasurement::measure_in_isolated_process([] {
+      // Ejecutar el algoritmo.
+    });
+
+const ntq::ElapsedMeasurements in_microseconds =
+    isolated.obtain_elapsed(ntq::TimeUnit::microseconds);
+const ntq::ElapsedMeasurements in_seconds =
+    isolated.obtain_elapsed(ntq::TimeUnit::seconds);
+```
+
+El proceso que lo invoca debe ser monohilo. El estado de memoria modificado en
+el hijo no se refleja en el padre; solo se devuelven las métricas. Los efectos
+externos, como escribir en un archivo, sí pueden persistir.
+
 ```cpp
 #include "metrics/time_measurement.hpp"
 
@@ -84,6 +105,12 @@ debe conservar la unidad que solicitó para interpretar los tres campos.
 - `reported_clock_resolution()`: consulta la resolución reportada de
   `CLOCK_MONOTONIC`. Es un método estático y puede invocarse sin iniciar una
   medición. Si la consulta del sistema falla, lanza `std::system_error`.
+- `measure_in_isolated_process(callback)`: ejecuta el callback en un proceso
+  hijo dedicado y devuelve una instancia lista para consultar con
+  `obtain_elapsed(unit)`. Los tiempos se conservan en nanosegundos hasta que se
+  solicita una unidad. Lanza `std::system_error` si fallan las operaciones POSIX
+  de proceso o comunicación, y `std::runtime_error` si el callback o la medición
+  falla en el hijo. No debe invocarse desde un proceso multihilo.
 - `start()`: captura los valores iniciales y marca la instancia como activa.
   Llamarlo de nuevo reinicia el ciclo y descarta resultados anteriores.
 - `stop()`: captura los valores finales y marca la instancia como detenida.
