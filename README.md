@@ -13,6 +13,9 @@ Herramientas independientes para medir algoritmos y procesos en C, C++ y Python.
   `types.hpp`: interfaz principal, opciones, resultados y tipos comunes.
 - `include/C++/data/`: API para semillas y generación de datos de prueba.
 - `include/C++/metrics/`: contratos de colectores de tiempo, proceso y hardware.
+- `include/C++/metrics/hardware_measurements.hpp`: resultados de IPC, fallos de
+  caché y branch mispredictions; `src/C++/metrics/linux/` contiene los
+  colectores Linux basados en `perf_event_open`.
 - `include/C++/system/system_info.hpp`: API para recolectar metadatos visibles
   del sistema Linux; `src/C++/system/linux/` contiene sus colectores.
 - `include/C++/statistics/`: resúmenes estadísticos y ajuste de complejidad.

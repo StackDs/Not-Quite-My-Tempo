@@ -99,7 +99,8 @@ TimeMeasurement TimeMeasurement::measure_in_isolated_process(
       measurement.memory_measurements_.peak_rss_scope =
           PeakRssScope::isolated_measurement_process;
       const linux_metrics::detail::IsolatedMeasurementPayload result{
-          measurement.elapsed_nanoseconds_, measurement.memory_measurements_};
+          measurement.elapsed_nanoseconds_, measurement.memory_measurements_,
+          measurement.hardware_measurements_};
       const bool sent = linux_metrics::detail::write_all(
           result_pipe[1], &result, sizeof(result));
       close(result_pipe[1]);
@@ -148,6 +149,7 @@ TimeMeasurement TimeMeasurement::measure_in_isolated_process(
   TimeMeasurement measurement(max_involuntary_context_switches);
   measurement.elapsed_nanoseconds_ = result.elapsed;
   measurement.memory_measurements_ = result.memory;
+  measurement.hardware_measurements_ = result.hardware;
   measurement.has_stopped_ = true;
   measurement.has_elapsed_ = true;
   return measurement;

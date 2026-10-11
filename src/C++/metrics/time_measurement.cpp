@@ -1,5 +1,7 @@
 #include "metrics/time_measurement.hpp"
 
+#include "linux/hardware_counters.hpp"
+#include "linux/hardware_measurement_calculations.hpp"
 #include "linux/memory_helpers.hpp"
 #include "linux/monotonic_clock.hpp"
 #include "linux/tlb_miss_counters.hpp"
@@ -26,6 +28,8 @@ TimeMeasurement::TimeMeasurement(TimeMeasurement &&other) noexcept
       resources_end_(other.resources_end_),
       elapsed_nanoseconds_(other.elapsed_nanoseconds_),
       memory_measurements_(other.memory_measurements_),
+      hardware_measurements_(other.hardware_measurements_),
+      hardware_counters_(std::move(other.hardware_counters_)),
       tlb_counters_(std::move(other.tlb_counters_)),
       max_involuntary_context_switches_(
           other.max_involuntary_context_switches_),
@@ -45,6 +49,8 @@ TimeMeasurement::operator=(TimeMeasurement &&other) noexcept {
     resources_end_ = other.resources_end_;
     elapsed_nanoseconds_ = other.elapsed_nanoseconds_;
     memory_measurements_ = other.memory_measurements_;
+    hardware_measurements_ = other.hardware_measurements_;
+    hardware_counters_ = std::move(other.hardware_counters_);
     tlb_counters_ = std::move(other.tlb_counters_);
     max_involuntary_context_switches_ =
         other.max_involuntary_context_switches_;
@@ -64,17 +70,23 @@ void TimeMeasurement::start() {
   has_stopped_ = false;
   has_elapsed_ = false;
 
+  memory_measurements_ = MemoryMeasurements{};
+  hardware_measurements_ = HardwareMeasurements{};
+  tlb_counters_.reset(new linux_metrics::TlbMissCounters());
+  hardware_counters_.reset(new linux_metrics::HardwareCounters());
+  tlb_counters_->prepare();
+  hardware_counters_->prepare();
+
   const std::chrono::nanoseconds wall_before =
       linux_metrics::detail::monotonic_now();
   const ResourceSnapshot resources = capture_resources();
-  tlb_counters_.reset(new linux_metrics::TlbMissCounters());
   tlb_counters_->start();
+  hardware_counters_->start();
   const std::chrono::nanoseconds wall_after =
       linux_metrics::detail::monotonic_now();
 
   resources_start_ = resources;
   wall_start_ = wall_before + (wall_after - wall_before) / 2;
-  memory_measurements_ = MemoryMeasurements{};
   is_running_ = true;
 }
 
@@ -89,6 +101,10 @@ void TimeMeasurement::stop() {
   if (tlb_counters_) {
     tlb_counters_->stop();
     tlb_counters_->apply(memory_measurements_);
+  }
+  if (hardware_counters_) {
+    hardware_counters_->stop();
+    hardware_counters_->apply(hardware_measurements_);
   }
   const ResourceSnapshot resources = capture_resources();
   const std::chrono::nanoseconds wall_after =
@@ -145,6 +161,7 @@ void TimeMeasurement::elapsed() {
       involuntary_context_switches,
       involuntary_context_switches > max_involuntary_context_switches_,
   };
+  linux_metrics::calculate_hardware_derived_metrics(hardware_measurements_);
   has_elapsed_ = true;
 }
 
@@ -171,6 +188,14 @@ MemoryMeasurements TimeMeasurement::obtain_memory() const {
         "No se pueden obtener métricas de memoria antes de calcularlas");
   }
   return memory_measurements_;
+}
+
+HardwareMeasurements TimeMeasurement::obtain_hardware() const {
+  if (!has_elapsed_) {
+    throw std::logic_error(
+        "No se pueden obtener métricas de hardware antes de calcularlas");
+  }
+  return hardware_measurements_;
 }
 
 } // namespace ntq

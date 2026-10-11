@@ -1,4 +1,6 @@
 #include "linux/tlb_miss_counters.hpp"
+#include "linux/perf_event_group.hpp"
+#include "linux/hardware_measurement_calculations.hpp"
 #include "metrics/time_measurement.hpp"
 #include "linux/memory_helpers.hpp"
 
@@ -24,6 +26,19 @@ bool valid_status(ntq::MemoryMetricStatus status) {
   return false;
 }
 
+bool valid_hardware_status(ntq::HardwareMetricStatus status) {
+  switch (status) {
+  case ntq::HardwareMetricStatus::available:
+  case ntq::HardwareMetricStatus::unsupported:
+  case ntq::HardwareMetricStatus::permission_denied:
+  case ntq::HardwareMetricStatus::read_error:
+  case ntq::HardwareMetricStatus::not_measured:
+  case ntq::HardwareMetricStatus::invalid_denominator:
+    return true;
+  }
+  return false;
+}
+
 void test_peak_rss_conversion() {
   std::uint64_t bytes = 0;
   assert(ntq::linux_metrics::peak_rss_kib_to_bytes(7, bytes));
@@ -41,6 +56,13 @@ void test_memory_result_state_and_manual_capture() {
     memory_requires_elapsed = true;
   }
   assert(memory_requires_elapsed);
+  bool hardware_requires_elapsed = false;
+  try {
+    (void)unmeasured.obtain_hardware();
+  } catch (const std::logic_error &) {
+    hardware_requires_elapsed = true;
+  }
+  assert(hardware_requires_elapsed);
 
   ntq::TimeMeasurement measurement;
   measurement.start();
@@ -82,6 +104,58 @@ void test_perf_error_mapping() {
   assert(status_from_perf_errno(EOPNOTSUPP) ==
          MemoryMetricStatus::unsupported);
   assert(status_from_perf_errno(EIO) == MemoryMetricStatus::read_error);
+
+  using ntq::linux_metrics::PerfEventStatus;
+  using ntq::linux_metrics::perf_status_from_errno;
+  assert(perf_status_from_errno(EPERM) ==
+         PerfEventStatus::permission_denied);
+  assert(perf_status_from_errno(EINVAL) == PerfEventStatus::unsupported);
+  assert(perf_status_from_errno(EIO) == PerfEventStatus::read_error);
+}
+
+void test_hardware_metric_calculations() {
+  ntq::HardwareMeasurements measurements;
+  measurements.cpu_cycles = 2000;
+  measurements.instructions_retired = 4000;
+  measurements.cpu_cycles_status = ntq::HardwareMetricStatus::available;
+  measurements.instructions_retired_status =
+      ntq::HardwareMetricStatus::available;
+  measurements.l1d_read_accesses = 200;
+  measurements.l1d_read_misses = 10;
+  measurements.l1d_read_accesses_status =
+      ntq::HardwareMetricStatus::available;
+  measurements.l1d_read_misses_status =
+      ntq::HardwareMetricStatus::available;
+  measurements.llc_read_accesses = 500;
+  measurements.llc_read_misses = 25;
+  measurements.llc_read_accesses_status =
+      ntq::HardwareMetricStatus::available;
+  measurements.llc_read_misses_status =
+      ntq::HardwareMetricStatus::available;
+
+  ntq::linux_metrics::calculate_hardware_derived_metrics(measurements);
+  assert(measurements.ipc_status == ntq::HardwareMetricStatus::available);
+  assert(measurements.ipc == 2.0);
+  assert(measurements.l1d_read_miss_percent_status ==
+         ntq::HardwareMetricStatus::available);
+  assert(measurements.l1d_read_miss_percent == 5.0);
+  assert(measurements.llc_read_miss_percent == 5.0);
+
+  measurements.cpu_cycles = 0;
+  ntq::linux_metrics::calculate_hardware_derived_metrics(measurements);
+  assert(measurements.ipc_status ==
+         ntq::HardwareMetricStatus::invalid_denominator);
+
+  measurements.l1d_read_accesses = 0;
+  ntq::linux_metrics::calculate_hardware_derived_metrics(measurements);
+  assert(measurements.l1d_read_miss_percent_status ==
+         ntq::HardwareMetricStatus::invalid_denominator);
+
+  measurements.instructions_retired_status =
+      ntq::HardwareMetricStatus::permission_denied;
+  ntq::linux_metrics::calculate_hardware_derived_metrics(measurements);
+  assert(measurements.ipc_status ==
+         ntq::HardwareMetricStatus::permission_denied);
 }
 
 void test_isolated_memory_transfer_and_optional_tlb() {
@@ -101,6 +175,17 @@ void test_isolated_memory_transfer_and_optional_tlb() {
   assert(memory.minor_page_faults > 0);
   assert(valid_status(memory.data_tlb_read_status));
   assert(valid_status(memory.data_tlb_write_status));
+  const auto hardware = measured.obtain_hardware();
+  assert(valid_hardware_status(hardware.cpu_cycles_status));
+  assert(valid_hardware_status(hardware.instructions_retired_status));
+  assert(valid_hardware_status(hardware.ipc_status));
+  assert(valid_hardware_status(hardware.l1d_read_accesses_status));
+  assert(valid_hardware_status(hardware.l1d_read_misses_status));
+  assert(valid_hardware_status(hardware.l1d_read_miss_percent_status));
+  assert(valid_hardware_status(hardware.llc_read_accesses_status));
+  assert(valid_hardware_status(hardware.llc_read_misses_status));
+  assert(valid_hardware_status(hardware.llc_read_miss_percent_status));
+  assert(valid_hardware_status(hardware.branch_mispredictions_status));
   assert(measured.obtain_elapsed(ntq::TimeUnit::microseconds).wall_clock >=
          0.0);
 }
@@ -124,6 +209,7 @@ int main() {
   test_memory_result_state_and_manual_capture();
   test_move_preserves_active_measurement();
   test_perf_error_mapping();
+  test_hardware_metric_calculations();
   test_isolated_memory_transfer_and_optional_tlb();
   test_isolated_callback_exception();
 }

@@ -49,7 +49,7 @@
 
 * **Retired Instructions:** Cantidad de instrucciones en ensamblador que se completaron de forma útil.
 
-* **Cache Misses (L1D y LLC):** Porcentaje de fallos al buscar datos en las cachés del procesador (penaliza la latencia).
+* **Cache Misses (L1D y LLC):** Reportar fallos de lectura y porcentaje sobre accesos de lectura para ambas cachés; indicar explícitamente si los eventos no están disponibles.
 
 * **Branch Mispredictions:** Saltos condicionales fallidos que obligaron a vaciar el pipeline del procesador.
 

@@ -77,6 +77,27 @@ incluyen ITLB. El hardware, kernel, permisos o restricciones de `perf_event_open
 pueden hacer que cada contador quede como `unsupported`, `permission_denied` o
 `read_error`; esto no impide obtener las otras métricas.
 
+## `HardwareMeasurements`
+
+Se obtiene con `TimeMeasurement::obtain_hardware()` después de `elapsed()`:
+
+- `cpu_cycles` e `instructions_retired`: contadores usados para obtener `ipc`
+  (instrucciones retiradas por ciclo).
+- `l1d_read_accesses` / `l1d_read_misses` y `llc_read_accesses` /
+  `llc_read_misses`: contadores crudos para calcular los porcentajes de fallos de
+  lectura L1D y LLC.
+- `branch_mispredictions`: predicciones de saltos fallidas.
+- Los campos `*_status` identifican si el contador o valor derivado está
+  `available`, `unsupported`, `permission_denied`, `read_error` o `not_measured`.
+  `invalid_denominator` significa que no se puede calcular IPC o un porcentaje
+  porque su denominador fue cero.
+
+Los eventos genéricos se obtienen mediante `perf_event_open`. Ciclos/instrucciones
+y accesos/fallos de cada caché se cuentan en grupos para que los términos de cada
+razón compartan el mismo intervalo efectivo. Los conteos pueden escalarse si el
+kernel multiplexa eventos. Las tasas de caché corresponden a accesos de lectura;
+los fallos de escritura no se incluyen en esos porcentajes.
+
 ## `TimeMeasurement`
 
 La medición se usa en este orden:
@@ -87,6 +108,7 @@ La medición se usa en este orden:
 4. `elapsed()` calcula y guarda las diferencias de los snapshots.
 5. `obtain_elapsed(unit)` obtiene los resultados en la unidad deseada.
 6. `obtain_memory()` obtiene métricas de memoria sin conversión de unidad.
+7. `obtain_hardware()` obtiene los contadores de microarquitectura.
 
 Para medir en un proceso dedicado se puede usar
 `TimeMeasurement::measure_in_isolated_process(callback)`. El método crea un hijo
@@ -104,6 +126,7 @@ const ntq::ElapsedMeasurements in_microseconds =
 const ntq::ElapsedMeasurements in_seconds =
     isolated.obtain_elapsed(ntq::TimeUnit::seconds);
 const ntq::MemoryMeasurements memory = isolated.obtain_memory();
+const ntq::HardwareMeasurements hardware = isolated.obtain_hardware();
 ```
 
 El proceso que lo invoca debe ser monohilo. El estado de memoria modificado en
@@ -131,6 +154,7 @@ const ntq::ElapsedMeasurements result =
 const ntq::ElapsedMeasurements result_in_seconds =
     measurement.obtain_elapsed(ntq::TimeUnit::seconds);
 const ntq::MemoryMeasurements memory = measurement.obtain_memory();
+const ntq::HardwareMeasurements hardware = measurement.obtain_hardware();
 ```
 
 Se puede llamar a `obtain_elapsed()` varias veces para una medición. Cada
@@ -158,6 +182,8 @@ debe conservar la unidad que solicitó para interpretar los tres campos.
 - `obtain_memory() const`: devuelve Peak RSS, deltas de page faults y
   estados/conteos DTLB después de `elapsed()`. Antes de calcular el resultado
   lanza `std::logic_error`.
+- `obtain_hardware() const`: devuelve IPC, contadores de instrucciones, caché y
+  branch mispredictions con su estado de disponibilidad; requiere `elapsed()`.
 - `start()`: captura los valores iniciales y marca la instancia como activa.
   Llamarlo de nuevo reinicia el ciclo y descarta resultados anteriores.
 - `stop()`: captura los valores finales y marca la instancia como detenida.

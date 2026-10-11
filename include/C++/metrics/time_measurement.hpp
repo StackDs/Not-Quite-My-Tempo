@@ -1,5 +1,7 @@
 #pragma once
 
+#include "metrics/hardware_measurements.hpp"
+
 #include <chrono>
 #include <cstdint>
 #include <functional>
@@ -51,6 +53,7 @@ struct MemoryMeasurements {
 };
 
 namespace linux_metrics {
+class HardwareCounters;
 class TlbMissCounters;
 } // namespace linux_metrics
 
@@ -83,6 +86,7 @@ public:
   void elapsed();
   ElapsedMeasurements obtain_elapsed(TimeUnit unit) const;
   MemoryMeasurements obtain_memory() const;
+  HardwareMeasurements obtain_hardware() const;
 
 private:
   // Estructura que representa una instantánea de los recursos del sistema.
@@ -108,6 +112,8 @@ private:
   ResourceSnapshot resources_end_{};
   ElapsedMeasurements elapsed_nanoseconds_{};
   MemoryMeasurements memory_measurements_{};
+  HardwareMeasurements hardware_measurements_{};
+  std::unique_ptr<linux_metrics::HardwareCounters> hardware_counters_;
   std::unique_ptr<linux_metrics::TlbMissCounters> tlb_counters_;
   long max_involuntary_context_switches_{0};
   bool is_running_{false};

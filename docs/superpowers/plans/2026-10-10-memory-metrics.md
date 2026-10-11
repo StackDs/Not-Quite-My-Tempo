@@ -54,7 +54,7 @@ Test that `obtain_memory()` before `elapsed()` throws `std::logic_error`; test `
 
 - [ ] **Step 2: Run the standalone metrics test and confirm failure**
 
-Run: `g++ -std=c++14 -Wall -Wextra -Wpedantic -Iinclude/C++ -Isrc/C++/metrics -Isrc/C++/metrics/linux tests/C++/metrics/time_measurement_tests.cpp src/C++/metrics/time_measurement.cpp src/C++/metrics/time_conversion.cpp src/C++/metrics/linux/monotonic_clock.cpp src/C++/metrics/linux/process_resource_snapshot.cpp src/C++/metrics/linux/isolated_process.cpp src/C++/metrics/linux/tlb_miss_counters.cpp -o /tmp/time_measurement_tests`
+Run: `g++ -std=c++14 -Wall -Wextra -Wpedantic -Iinclude/C++ -Isrc/C++/metrics -Isrc/C++/metrics/linux tests/C++/metrics/time_measurement_tests.cpp src/C++/metrics/time_measurement.cpp src/C++/metrics/time_conversion.cpp src/C++/metrics/linux/monotonic_clock.cpp src/C++/metrics/linux/process_resource_snapshot.cpp src/C++/metrics/linux/isolated_process.cpp src/C++/metrics/linux/perf_event_group.cpp src/C++/metrics/linux/tlb_miss_counters.cpp src/C++/metrics/linux/hardware_counters.cpp src/C++/metrics/linux/hardware_measurement_calculations.cpp -o /tmp/time_measurement_tests`
 
 Expected: missing memory API/helper or failed assertions.
 
@@ -95,7 +95,7 @@ Test `status_from_perf_errno(int error)` for `EPERM`, `EACCES`, `EINVAL`, `EOPNO
 
 - [ ] **Step 2: Run the standalone metrics test and confirm failure**
 
-Run: `g++ -std=c++14 -Wall -Wextra -Wpedantic -Iinclude/C++ -Isrc/C++/metrics -Isrc/C++/metrics/linux tests/C++/metrics/time_measurement_tests.cpp src/C++/metrics/time_measurement.cpp src/C++/metrics/time_conversion.cpp src/C++/metrics/linux/monotonic_clock.cpp src/C++/metrics/linux/process_resource_snapshot.cpp src/C++/metrics/linux/isolated_process.cpp src/C++/metrics/linux/tlb_miss_counters.cpp -o /tmp/time_measurement_tests`
+Run: `g++ -std=c++14 -Wall -Wextra -Wpedantic -Iinclude/C++ -Isrc/C++/metrics -Isrc/C++/metrics/linux tests/C++/metrics/time_measurement_tests.cpp src/C++/metrics/time_measurement.cpp src/C++/metrics/time_conversion.cpp src/C++/metrics/linux/monotonic_clock.cpp src/C++/metrics/linux/process_resource_snapshot.cpp src/C++/metrics/linux/isolated_process.cpp src/C++/metrics/linux/perf_event_group.cpp src/C++/metrics/linux/tlb_miss_counters.cpp src/C++/metrics/linux/hardware_counters.cpp src/C++/metrics/linux/hardware_measurement_calculations.cpp -o /tmp/time_measurement_tests`
 
 Expected: perf status mapping or counter lifecycle cases fail until implemented.
 
@@ -139,7 +139,7 @@ State that Peak RSS is the child process's lifetime high-water RSS (Linux KiB co
 
 - [ ] **Step 4: Run final compile, tests, and whitespace validation**
 
-Run: `g++ -std=c++14 -Wall -Wextra -Wpedantic -Werror -Iinclude/C++ -Isrc/C++/metrics -Isrc/C++/metrics/linux tests/C++/metrics/time_measurement_tests.cpp src/C++/metrics/time_measurement.cpp src/C++/metrics/time_conversion.cpp src/C++/metrics/linux/monotonic_clock.cpp src/C++/metrics/linux/process_resource_snapshot.cpp src/C++/metrics/linux/isolated_process.cpp src/C++/metrics/linux/tlb_miss_counters.cpp -o /tmp/time_measurement_tests && /tmp/time_measurement_tests`
+Run: `g++ -std=c++14 -Wall -Wextra -Wpedantic -Werror -Iinclude/C++ -Isrc/C++/metrics -Isrc/C++/metrics/linux tests/C++/metrics/time_measurement_tests.cpp src/C++/metrics/time_measurement.cpp src/C++/metrics/time_conversion.cpp src/C++/metrics/linux/monotonic_clock.cpp src/C++/metrics/linux/process_resource_snapshot.cpp src/C++/metrics/linux/isolated_process.cpp src/C++/metrics/linux/perf_event_group.cpp src/C++/metrics/linux/tlb_miss_counters.cpp src/C++/metrics/linux/hardware_counters.cpp src/C++/metrics/linux/hardware_measurement_calculations.cpp -o /tmp/time_measurement_tests && /tmp/time_measurement_tests`
 
 Run: `git diff --check`
 

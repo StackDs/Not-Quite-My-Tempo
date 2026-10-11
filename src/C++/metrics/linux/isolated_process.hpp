@@ -9,6 +9,7 @@ namespace detail {
 struct IsolatedMeasurementPayload {
   ElapsedMeasurements elapsed;
   MemoryMeasurements memory;
+  HardwareMeasurements hardware;
 };
 
 } // namespace detail

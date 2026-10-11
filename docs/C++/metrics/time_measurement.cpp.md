@@ -13,6 +13,13 @@ tiempo de CPU en segundos y microsegundos, junto con `ru_maxrss`, `ru_minflt` y
 medio aproxima el instante del snapshot. `elapsed()` conserva los deltas de
 tiempo en nanosegundos; `obtain_elapsed(unit)` los convierte a la unidad pedida.
 
+`linux/perf_event_group.cpp` administra grupos de hardware perf con escalado de
+eventos multiplexados. `linux/hardware_counters.cpp` configura los grupos de IPC,
+L1D, LLC y branch misses; `hardware_measurement_calculations.cpp` calcula IPC y
+porcentajes de fallos una vez leídos los contadores. El grupo de ciclos e
+instrucciones y cada par de accesos/fallos de caché comparte tiempo de ejecución
+para conservar razones coherentes.
+
 `obtain_memory()` devuelve los page faults como deltas y el valor final de
 `ru_maxrss` convertido de KiB a bytes. Como `ru_maxrss` es un máximo de vida del
 proceso, una llamada manual se etiqueta `process_lifetime`; el método aislado
@@ -31,8 +38,8 @@ desde un lanzador monohilo. Los cambios de memoria del hijo no son visibles para
 el padre. Si el callback lanza una excepción o la medición falla, el hijo
 termina con error y el padre recibe `std::runtime_error`.
 
-`linux/tlb_miss_counters.cpp` abre eventos genéricos DTLB de lectura y escritura
-mediante `perf_event_open`, con kernel e hipervisor excluidos. Cada contador puede
+`linux/tlb_miss_counters.cpp` configura eventos DTLB sobre el mismo mecanismo
+`PerfEventGroup`, con kernel e hipervisor excluidos. Cada contador puede
 reportarse por separado como `available`, `unsupported`, `permission_denied`,
 `read_error` o `not_measured`. La falta de permisos/soporte no interrumpe la
 medición y nunca se presenta como un cero válido. Los eventos se reinician y
@@ -82,6 +89,8 @@ conservan independientemente de la flag; esta capa no descarta ni repite muestra
   lo que las llamadas siguientes pueden elegir otra unidad.
 - `obtain_memory() const`: requiere `elapsed()` y devuelve métricas RSS/page
   faults/DTLB. No convierte los valores de memoria.
+- `obtain_hardware() const`: requiere `elapsed()` y devuelve contadores crudos,
+  IPC y porcentajes de fallos de lectura L1D/LLC con sus estados.
 
 ## Estado interno
 
@@ -98,5 +107,9 @@ conservan independientemente de la flag; esta capa no descarta ni repite muestra
 - `memory_measurements_`: Peak RSS, deltas minor/major y valores/estados de DTLB.
 - `tlb_counters_`: propietario RAII de los eventos perf activos durante la
   sección medida; el objeto es movible y no copiable.
+- `hardware_counters_`: coordina grupos perf para ciclos/instrucciones, accesos y
+  fallos L1D/LLC, y branch mispredictions.
+- `hardware_measurements_`: lecturas crudas y valores derivados con estado por
+  métrica.
 - `max_involuntary_context_switches_`: máximo de cambios involuntarios permitidos
   antes de marcar el resultado como sospechoso.
