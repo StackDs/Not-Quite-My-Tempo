@@ -1,7 +1,9 @@
 #pragma once
 
 #include <chrono>
+#include <cstdint>
 #include <functional>
+#include <memory>
 
 namespace ntq {
 
@@ -26,12 +28,44 @@ struct ElapsedMeasurements {
   bool suspicious{false};
 };
 
+enum class MemoryMetricStatus {
+  available,
+  unsupported,
+  permission_denied,
+  read_error,
+  not_measured
+};
+
+enum class PeakRssScope { process_lifetime, isolated_measurement_process };
+
+struct MemoryMeasurements {
+  std::uint64_t peak_rss_bytes{0};
+  std::uint64_t minor_page_faults{0};
+  std::uint64_t major_page_faults{0};
+  std::uint64_t data_tlb_read_misses{0};
+  std::uint64_t data_tlb_write_misses{0};
+  MemoryMetricStatus peak_rss_status{MemoryMetricStatus::not_measured};
+  MemoryMetricStatus data_tlb_read_status{MemoryMetricStatus::not_measured};
+  MemoryMetricStatus data_tlb_write_status{MemoryMetricStatus::not_measured};
+  PeakRssScope peak_rss_scope{PeakRssScope::process_lifetime};
+};
+
+namespace linux_metrics {
+class TlbMissCounters;
+} // namespace linux_metrics
+
 // Clase que permite medir el tiempo transcurrido y las métricas de recursos.
 class TimeMeasurement {
 public:
   // El umbral es el máximo de cambios involuntarios permitidos antes de marcar
   // el resultado como sospechoso. El valor predeterminado estricto es cero.
   explicit TimeMeasurement(long max_involuntary_context_switches = 0);
+  ~TimeMeasurement();
+
+  TimeMeasurement(const TimeMeasurement &) = delete;
+  TimeMeasurement &operator=(const TimeMeasurement &) = delete;
+  TimeMeasurement(TimeMeasurement &&other) noexcept;
+  TimeMeasurement &operator=(TimeMeasurement &&other) noexcept;
 
   // Devuelve la resolución reportada por Linux para CLOCK_MONOTONIC, en
   // nanosegundos. El mismo reloj se usa para medir el wall-clock.
@@ -48,6 +82,7 @@ public:
   void stop();
   void elapsed();
   ElapsedMeasurements obtain_elapsed(TimeUnit unit) const;
+  MemoryMeasurements obtain_memory() const;
 
 private:
   // Estructura que representa una instantánea de los recursos del sistema.
@@ -58,6 +93,9 @@ private:
     long system_microseconds{0};
     long voluntary_context_switches{0};
     long involuntary_context_switches{0};
+    long peak_rss_kib{0};
+    long minor_page_faults{0};
+    long major_page_faults{0};
   };
 
   // Funcion que captura un snapshot de los recursos del sistema, incluyendo el
@@ -69,6 +107,8 @@ private:
   ResourceSnapshot resources_start_{};
   ResourceSnapshot resources_end_{};
   ElapsedMeasurements elapsed_nanoseconds_{};
+  MemoryMeasurements memory_measurements_{};
+  std::unique_ptr<linux_metrics::TlbMissCounters> tlb_counters_;
   long max_involuntary_context_switches_{0};
   bool is_running_{false};
   bool has_stopped_{false};

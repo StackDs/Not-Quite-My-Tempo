@@ -41,7 +41,7 @@
 
 * **Page Faults Major:** Accesos críticos a disco o swap (deberían tender a cero en algoritmos en memoria).
 
-* **TLB Misses:** Costo acumulativo por traducir direcciones virtuales a físicas (común en accesos dispersos a grandes estructuras).
+* **TLB Misses:** Reportar fallos de lectura y escritura del DTLB mediante contadores de hardware cuando estén disponibles; marcar explícitamente cuando el hardware, kernel o permisos impidan medirlos. Esta implementación no incluye fallos del ITLB.
 
 ## 4. Telemetría de Hardware (Microarquitectura)
 

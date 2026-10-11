@@ -4,6 +4,11 @@ API: `include/C++/system/system_info.hpp`
 Implementación Linux: `src/C++/system/linux/`  
 Namespace: `ntq`
 
+La implementación está separada por responsabilidad: `system_info.cpp` coordina;
+`cpu_info_collector.cpp` y `cgroup_info_collector.cpp` recolectan cada dominio;
+`cpu_parsers.cpp` y `cgroup_parsers.cpp` procesan sus formatos; `text_parsers.cpp`
+y `file_reader.cpp` ofrecen utilidades compartidas de texto y lectura.
+
 `collect_system_info()` devuelve hardware, estado de CPU, propiedades detectables
 del compilador y límites del sandbox/cgroup en una instancia de `SystemInfo`.
 La recolección es de solo lectura: no cambia gobernador, frecuencia, Turbo/boost,
@@ -88,7 +93,12 @@ g++ -std=c++14 -Wall -Wextra -Wpedantic -Werror \
   -Iinclude/C++ -Isrc/C++/system/linux \
   tests/C++/system/system_info_tests.cpp \
   src/C++/system/linux/compiler_info.cpp \
-  src/C++/system/linux/parsers.cpp \
+  src/C++/system/linux/text_parsers.cpp \
+  src/C++/system/linux/cpu_parsers.cpp \
+  src/C++/system/linux/cgroup_parsers.cpp \
+  src/C++/system/linux/file_reader.cpp \
+  src/C++/system/linux/cpu_info_collector.cpp \
+  src/C++/system/linux/cgroup_info_collector.cpp \
   src/C++/system/linux/system_info.cpp \
   -o /tmp/system_info_tests
 /tmp/system_info_tests

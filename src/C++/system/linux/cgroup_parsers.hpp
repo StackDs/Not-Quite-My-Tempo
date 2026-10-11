@@ -9,21 +9,6 @@
 namespace ntq {
 namespace linux_system {
 
-CollectionStatus status_from_errno(int error);
-
-struct CpuIdentity {
-  CollectedValue<std::string> vendor;
-  CollectedValue<std::string> model;
-};
-
-CollectedValue<std::vector<unsigned>> parse_cpu_list(const std::string &text,
-                                                     const std::string &source);
-CollectedValue<std::uint64_t> parse_cache_size(const std::string &text,
-                                               const std::string &source);
-CpuIdentity parse_cpuinfo(const std::string &text);
-std::vector<CacheInfo>
-deduplicate_caches(const std::vector<CacheInfo> &caches);
-
 struct CpuQuota {
   std::uint64_t quota_us{0};
   std::uint64_t period_us{0};

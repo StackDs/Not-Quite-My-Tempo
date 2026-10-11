@@ -4,9 +4,8 @@ Archivo documentado: `include/C++/metrics/time_measurement.hpp`
 Namespace: `ntq`
 
 Este header declara la API pública para medir una sección de código y obtener
-tiempo de pared, tiempo de CPU del proceso y cambios de contexto. La captura de
-CPU, cambios de contexto y resolución reportada del reloj está implementada para
-Linux.
+tiempo de pared, tiempo de CPU, cambios de contexto y métricas de memoria. La
+captura de recursos y los contadores perf están implementados para Linux.
 
 ## Resolución del reloj
 
@@ -50,6 +49,34 @@ en `obtain_elapsed()`. Los cambios de contexto son conteos `long` y no se
 convierten; la unidad se conoce por el argumento pasado a ese método.
 `suspicious` tampoco depende de la unidad: es una flag booleana del resultado.
 
+## `MemoryMeasurements`
+
+Se obtiene con `TimeMeasurement::obtain_memory()` después de `elapsed()`:
+
+- `peak_rss_bytes`: high-water RSS del proceso, expresado en bytes.
+- `minor_page_faults` / `major_page_faults`: conteos ocurridos entre `start()` y
+  `stop()`.
+- `data_tlb_read_misses` / `data_tlb_write_misses`: fallos de DTLB reportados por
+  los eventos genéricos de Linux `perf_event_open`.
+- `peak_rss_status`: disponibilidad del Peak RSS.
+- `data_tlb_read_status` / `data_tlb_write_status`: estado de cada contador perf
+  (`available`, `unsupported`, `permission_denied`, `read_error` o
+  `not_measured`); si no está disponible, su valor numérico no debe
+  interpretarse como cero.
+- `peak_rss_scope`: indica si el pico corresponde a toda la vida del proceso o
+  al proceso hijo aislado de una medición.
+
+En Linux, `ru_maxrss` se reporta en KiB y se convierte a bytes. Es un máximo
+acumulado y no se resta entre snapshots: en una medición manual representa el
+high-water RSS de todo el proceso. Para asociarlo a una sola ejecución, usa
+`measure_in_isolated_process()`. Los page faults sí se reportan como deltas de
+`ru_minflt` y `ru_majflt`.
+
+Los eventos TLB cuentan DTLB de lecturas y escrituras, en espacio de usuario. No
+incluyen ITLB. El hardware, kernel, permisos o restricciones de `perf_event_open`
+pueden hacer que cada contador quede como `unsupported`, `permission_denied` o
+`read_error`; esto no impide obtener las otras métricas.
+
 ## `TimeMeasurement`
 
 La medición se usa en este orden:
@@ -59,6 +86,7 @@ La medición se usa en este orden:
 3. `stop()` detiene la captura.
 4. `elapsed()` calcula y guarda las diferencias de los snapshots.
 5. `obtain_elapsed(unit)` obtiene los resultados en la unidad deseada.
+6. `obtain_memory()` obtiene métricas de memoria sin conversión de unidad.
 
 Para medir en un proceso dedicado se puede usar
 `TimeMeasurement::measure_in_isolated_process(callback)`. El método crea un hijo
@@ -75,6 +103,7 @@ const ntq::ElapsedMeasurements in_microseconds =
     isolated.obtain_elapsed(ntq::TimeUnit::microseconds);
 const ntq::ElapsedMeasurements in_seconds =
     isolated.obtain_elapsed(ntq::TimeUnit::seconds);
+const ntq::MemoryMeasurements memory = isolated.obtain_memory();
 ```
 
 El proceso que lo invoca debe ser monohilo. El estado de memoria modificado en
@@ -101,6 +130,7 @@ const ntq::ElapsedMeasurements result =
     measurement.obtain_elapsed(ntq::TimeUnit::microseconds);
 const ntq::ElapsedMeasurements result_in_seconds =
     measurement.obtain_elapsed(ntq::TimeUnit::seconds);
+const ntq::MemoryMeasurements memory = measurement.obtain_memory();
 ```
 
 Se puede llamar a `obtain_elapsed()` varias veces para una medición. Cada
@@ -125,6 +155,9 @@ debe conservar la unidad que solicitó para interpretar los tres campos.
 - `TimeMeasurement(max_involuntary_context_switches)`: configura el umbral del
   flujo manual; el valor por defecto es cero. Un valor negativo lanza
   `std::invalid_argument`.
+- `obtain_memory() const`: devuelve Peak RSS, deltas de page faults y
+  estados/conteos DTLB después de `elapsed()`. Antes de calcular el resultado
+  lanza `std::logic_error`.
 - `start()`: captura los valores iniciales y marca la instancia como activa.
   Llamarlo de nuevo reinicia el ciclo y descarta resultados anteriores.
 - `stop()`: captura los valores finales y marca la instancia como detenida.
@@ -136,5 +169,9 @@ debe conservar la unidad que solicitó para interpretar los tres campos.
   otra unidad después; los campos del resultado retornado no incluyen la unidad.
 
 `stop()` si la medición no está activa, `elapsed()` antes de detenerla y
-`obtain_elapsed()` antes de calcular el resultado lanzan `std::logic_error`.
+`obtain_elapsed()`/`obtain_memory()` antes de calcular el resultado lanzan
+`std::logic_error`.
 Una unidad fuera del enum lanza `std::invalid_argument`.
+
+`TimeMeasurement` es movible y no copiable para que la propiedad de los
+descriptores perf sea única y segura.
