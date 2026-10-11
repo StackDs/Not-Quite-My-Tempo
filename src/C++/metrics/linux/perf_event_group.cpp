@@ -28,6 +28,7 @@ struct GroupReadValue {
 } // namespace
 
 PerfEventStatus perf_status_from_errno(int error) {
+  // Distingue restricciones del sistema, evento no soportado y fallo de lectura.
   if (error == EACCES || error == EPERM) {
     return PerfEventStatus::permission_denied;
   }
@@ -110,6 +111,7 @@ void PerfEventGroup::mark_group_unavailable(PerfEventStatus status) noexcept {
 }
 
 void PerfEventGroup::prepare() noexcept {
+  // Abre el grupo deshabilitado antes de tomar los snapshots de inicio.
   close_descriptors();
   std::fill(ids_.begin(), ids_.end(), 0);
   for (auto &result : results_) {
@@ -167,6 +169,7 @@ void PerfEventGroup::start() noexcept {
   if (!is_prepared_ || leader_descriptor_ < 0) {
     return;
   }
+  // El líder reinicia/activa todos los eventos del grupo a la vez.
   if (ioctl(leader_descriptor_, PERF_EVENT_IOC_RESET,
             PERF_IOC_FLAG_GROUP) == -1 ||
       ioctl(leader_descriptor_, PERF_EVENT_IOC_ENABLE,
@@ -187,6 +190,8 @@ void PerfEventGroup::stop() noexcept {
     return;
   }
 
+  // El formato de lectura agrupada incluye tiempos e IDs para escalar y asociar
+  // cada contador aunque el kernel devuelva los eventos en otro orden.
   std::fill(read_buffer_.begin(), read_buffer_.end(), 0);
   const std::size_t expected_bytes = read_buffer_.size() * sizeof(std::uint64_t);
   ssize_t bytes_read;

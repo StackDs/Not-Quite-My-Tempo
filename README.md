@@ -18,7 +18,10 @@ Herramientas independientes para medir algoritmos y procesos en C, C++ y Python.
   colectores Linux basados en `perf_event_open`.
 - `include/C++/system/system_info.hpp`: API para recolectar metadatos visibles
   del sistema Linux; `src/C++/system/linux/` contiene sus colectores.
-- `include/C++/statistics/`: resúmenes estadísticos y ajuste de complejidad.
+- `include/C++/statistics/statistics.hpp`: resumen configurable de muestras
+  agrupadas, intervalos bootstrap, comparaciones pareadas/no pareadas y auditoría
+  de exclusiones; `src/C++/statistics/` contiene sus cálculos. El ajuste de
+  complejidad se mantiene como análisis consumidor separado.
 - `include/C++/output/`: interfaz para escribir resultados CSV.
 - `include/C++/system/`: interfaz para registrar información del equipo.
 - `src/C++/`: archivos de implementación C++ organizados por esas mismas

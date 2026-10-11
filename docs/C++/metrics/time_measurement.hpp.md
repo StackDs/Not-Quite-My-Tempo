@@ -42,6 +42,9 @@ Estructura que contiene los valores calculados:
 - `involuntary_context_switches`: cambios de contexto involuntarios.
 - `suspicious`: indica si los cambios involuntarios superaron el umbral
   configurado.
+- `involuntary_context_switch_threshold`: umbral que se evaluó.
+- `suspicious_reason`: regla que activó la flag; por ahora identifica que el
+  contador involuntario superó ese umbral.
 
 Los tres campos de tiempo son `double` y están expresados en la unidad pedida.
 Los tres tiempos devueltos por una misma llamada comparten la unidad indicada

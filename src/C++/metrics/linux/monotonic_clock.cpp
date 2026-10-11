@@ -10,6 +10,7 @@ namespace ntq {
 namespace linux_metrics {
 namespace detail {
 
+// Lee el mismo reloj monotónico que se usa para consultar su resolución.
 std::chrono::nanoseconds monotonic_now() {
   timespec timestamp{};
   if (clock_gettime(CLOCK_MONOTONIC, &timestamp) == -1) {
@@ -23,6 +24,7 @@ std::chrono::nanoseconds monotonic_now() {
 } // namespace detail
 } // namespace linux_metrics
 
+// Informa la resolución declarada por el kernel para CLOCK_MONOTONIC.
 std::chrono::nanoseconds TimeMeasurement::reported_clock_resolution() {
   timespec resolution{};
   if (clock_getres(CLOCK_MONOTONIC, &resolution) == -1) {

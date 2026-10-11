@@ -14,6 +14,7 @@ namespace ntq {
 
 TimeMeasurement::TimeMeasurement(long max_involuntary_context_switches)
     : max_involuntary_context_switches_(max_involuntary_context_switches) {
+  // Un umbral negativo no tiene significado como máximo permitido.
   if (max_involuntary_context_switches_ < 0) {
     throw std::invalid_argument(
         "El máximo de cambios involuntarios no puede ser negativo");
@@ -35,13 +36,13 @@ TimeMeasurement::TimeMeasurement(TimeMeasurement &&other) noexcept
           other.max_involuntary_context_switches_),
       is_running_(other.is_running_), has_stopped_(other.has_stopped_),
       has_elapsed_(other.has_elapsed_) {
+  // La propiedad de los contadores perf y del estado de medición pasa al destino.
   other.is_running_ = false;
   other.has_stopped_ = false;
   other.has_elapsed_ = false;
 }
 
-TimeMeasurement &
-TimeMeasurement::operator=(TimeMeasurement &&other) noexcept {
+TimeMeasurement &TimeMeasurement::operator=(TimeMeasurement &&other) noexcept {
   if (this != &other) {
     wall_start_ = other.wall_start_;
     wall_end_ = other.wall_end_;
@@ -52,8 +53,7 @@ TimeMeasurement::operator=(TimeMeasurement &&other) noexcept {
     hardware_measurements_ = other.hardware_measurements_;
     hardware_counters_ = std::move(other.hardware_counters_);
     tlb_counters_ = std::move(other.tlb_counters_);
-    max_involuntary_context_switches_ =
-        other.max_involuntary_context_switches_;
+    max_involuntary_context_switches_ = other.max_involuntary_context_switches_;
     is_running_ = other.is_running_;
     has_stopped_ = other.has_stopped_;
     has_elapsed_ = other.has_elapsed_;
@@ -70,6 +70,8 @@ void TimeMeasurement::start() {
   has_stopped_ = false;
   has_elapsed_ = false;
 
+  // Abrir los eventos antes del snapshot reduce el costo instrumental dentro de
+  // la sección cuyos recursos se comparan.
   memory_measurements_ = MemoryMeasurements{};
   hardware_measurements_ = HardwareMeasurements{};
   tlb_counters_.reset(new linux_metrics::TlbMissCounters());
@@ -96,6 +98,7 @@ void TimeMeasurement::stop() {
         "No se puede detener la medición de tiempo antes de iniciarla");
   }
 
+  // Detiene los contadores de hardware antes de capturar el snapshot final.
   const std::chrono::nanoseconds wall_before =
       linux_metrics::detail::monotonic_now();
   if (tlb_counters_) {
@@ -123,6 +126,8 @@ void TimeMeasurement::elapsed() {
                            "de detener la medición de tiempo");
   }
 
+  // Calcula deltas de tiempo, recursos y la regla de sospecha sin alterar los
+  // snapshots originales.
   const auto wall_duration = wall_end_ - wall_start_;
   const long user_seconds =
       resources_end_.user_seconds - resources_start_.user_seconds;
@@ -150,6 +155,8 @@ void TimeMeasurement::elapsed() {
   memory_measurements_.major_page_faults = static_cast<std::uint64_t>(
       resources_end_.major_page_faults - resources_start_.major_page_faults);
 
+  const bool suspicious =
+      involuntary_context_switches > max_involuntary_context_switches_;
   elapsed_nanoseconds_ = {
       static_cast<double>(wall_duration.count()),
       static_cast<double>(metrics_detail::cpu_time_delta_nanoseconds(
@@ -159,7 +166,10 @@ void TimeMeasurement::elapsed() {
       resources_end_.voluntary_context_switches -
           resources_start_.voluntary_context_switches,
       involuntary_context_switches,
-      involuntary_context_switches > max_involuntary_context_switches_,
+      suspicious,
+      max_involuntary_context_switches_,
+      suspicious ? SuspicionReason::involuntary_context_switches_exceeded
+                 : SuspicionReason::none,
   };
   linux_metrics::calculate_hardware_derived_metrics(hardware_measurements_);
   has_elapsed_ = true;
@@ -171,6 +181,7 @@ ElapsedMeasurements TimeMeasurement::obtain_elapsed(TimeUnit unit) const {
         "No se puede obtener el tiempo transcurrido antes de calcularlo");
   }
 
+  // La conversión solo afecta los tiempos; los contadores conservan sus unidades.
   const double divisor = metrics_detail::nanoseconds_per_unit(unit);
   return {
       elapsed_nanoseconds_.wall_clock / divisor,
@@ -179,6 +190,8 @@ ElapsedMeasurements TimeMeasurement::obtain_elapsed(TimeUnit unit) const {
       elapsed_nanoseconds_.voluntary_context_switches,
       elapsed_nanoseconds_.involuntary_context_switches,
       elapsed_nanoseconds_.suspicious,
+      elapsed_nanoseconds_.involuntary_context_switch_threshold,
+      elapsed_nanoseconds_.suspicious_reason,
   };
 }
 

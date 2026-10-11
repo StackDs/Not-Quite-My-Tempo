@@ -6,6 +6,7 @@
 
 namespace ntq {
 
+// Captura en una sola llamada de getrusage los deltas/contadores del proceso.
 TimeMeasurement::ResourceSnapshot TimeMeasurement::capture_resources() {
   rusage usage{};
   if (getrusage(RUSAGE_SELF, &usage) == -1) {

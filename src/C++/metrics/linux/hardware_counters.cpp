@@ -35,6 +35,8 @@ void apply_event(const PerfEventGroup &group, std::size_t index,
 
 } // namespace
 
+// Agrupa ciclos/instrucciones y accesos/fallos de cada caché para que cada razón
+// se calcule con contadores observados durante el mismo intervalo.
 HardwareCounters::HardwareCounters()
     : cycles_and_instructions_({
           make_hardware_event(PERF_COUNT_HW_CPU_CYCLES),
@@ -80,6 +82,8 @@ void HardwareCounters::stop() noexcept {
 }
 
 void HardwareCounters::apply(HardwareMeasurements &measurements) const noexcept {
+  // Conserva valores y estados de cada evento por separado; el cálculo de IPC y
+  // porcentajes se realiza después, en hardware_measurement_calculations.cpp.
   apply_event(cycles_and_instructions_, 0, measurements.cpu_cycles,
               measurements.cpu_cycles_status);
   apply_event(cycles_and_instructions_, 1, measurements.instructions_retired,

@@ -30,8 +30,9 @@
 
   * *Involuntarios:* El sistema operativo quita la CPU al proceso. Si el contador
     supera el umbral configurado, la muestra se marca como sospechosa. Se
-    conservan y reportan sus métricas junto con una flag; no se descarta ni se
-    repite automáticamente. El usuario decide cómo tratarla.
+    conservan y reportan sus métricas junto con la regla, el valor y el umbral que
+    activaron la flag; no se descarta ni se repite automáticamente. El usuario
+    decide cómo tratarla.
 
 ## 3. Métricas de Memoria
 
@@ -55,13 +56,19 @@
 
 ## 5. Metodología de Ejecución y Estadística
 
-* **Fase de Warm-up:** Descartar las primeras $N$ ejecuciones para asegurar que los binarios estén cargados y las cachés llenas.
+* **Fase de Warm-up:** Descartar las primeras $N$ ejecuciones de cada grupo de mediciones. El grupo lo define el usuario mediante una clave (parámetro, índice, tamaño u otra dimensión).
 
-* **Limpieza de Ruido (Outliers):** Descartar mediciones atípicas que superen $Q3 + 1.5 \times IQR$ (interrupciones del sistema operativo).
+* **Limpieza de Ruido (Outliers):** Marcar y excluir del resumen filtrado las muestras que superen $Q3 + 1.5 \times IQR$. Conservar los datos originales, indicar el motivo por muestra y reportar resúmenes antes y después del filtro.
 
-* **Métricas de Tendencia Central:** Usar la Mediana (p50) y la Desviación Absoluta de la Mediana (MAD). Evitar la media/desviación estándar por su sensibilidad al ruido.
+* **Métricas de Tendencia Central y Dispersión:** Reportar Mediana (p50) y MAD como medidas robustas principales. Añadir mínimo, máximo, media aritmética y desviación estándar muestral como medidas complementarias, identificando el conjunto de muestras usado.
 
-* **Percentiles de Cola:** Reportar p90, p95, p99 y p99.9 para identificar el rendimiento en el "peor caso real".
+* **Incertidumbre:** Reportar intervalos de confianza del 95 % para media y mediana, estimados mediante bootstrap. Registrar método, remuestreos y semilla; marcar resultados con pocas muestras como de baja confiabilidad.
+
+* **Percentiles de Cola:** Reportar p90, p95, p99 y p99.9 para identificar la cola de la distribución. Marcar p99/p99.9 como poco fiables cuando el tamaño muestral no aporte suficientes observaciones esperadas en esa cola.
+
+* **Tamaño del Efecto:** Al comparar variantes, reportar diferencias absolutas y relativas. Si las ejecuciones están emparejadas por el mismo caso de entrada, comparar las diferencias por pares y reportar el método utilizado.
+
+* **Auditoría y Contexto:** Reportar iteraciones, warm-ups, duración, unidad, reloj, versión de la librería, parámetros del algoritmo y contexto del sistema. Indicar por muestra si fue apartada por warm-up, IQR u otra regla. Los indicadores de entorno son contexto, no correcciones automáticas.
 
 * **Análisis de Complejidad Empírica:** Ejecutar el algoritmo con tamaños de datos incrementales ($10^3, 10^4, \dots$) para reportar:
 

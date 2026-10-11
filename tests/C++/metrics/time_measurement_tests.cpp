@@ -82,6 +82,12 @@ void test_memory_result_state_and_manual_capture() {
   assert(valid_status(memory.data_tlb_write_status));
   assert(measurement.obtain_elapsed(ntq::TimeUnit::milliseconds).wall_clock >=
          0.0);
+  const auto elapsed = measurement.obtain_elapsed(ntq::TimeUnit::nanoseconds);
+  assert(elapsed.involuntary_context_switch_threshold == 0);
+  assert(elapsed.suspicious_reason ==
+         (elapsed.suspicious
+              ? ntq::SuspicionReason::involuntary_context_switches_exceeded
+              : ntq::SuspicionReason::none));
   assert(measurement.obtain_elapsed(ntq::TimeUnit::seconds).wall_clock >= 0.0);
 }
 

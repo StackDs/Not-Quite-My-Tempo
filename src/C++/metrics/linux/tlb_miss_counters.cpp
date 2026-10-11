@@ -8,6 +8,7 @@ namespace linux_metrics {
 namespace {
 
 MemoryMetricStatus memory_status(PerfEventStatus status) {
+  // Traduce el estado genérico de perf al contrato público de memoria.
   switch (status) {
   case PerfEventStatus::available:
     return MemoryMetricStatus::available;
@@ -29,6 +30,7 @@ MemoryMetricStatus status_from_perf_errno(int error) {
   return memory_status(perf_status_from_errno(error));
 }
 
+// Agrupa las lecturas y escrituras del DTLB durante la misma sección.
 TlbMissCounters::TlbMissCounters()
     : events_({make_cache_event(PERF_COUNT_HW_CACHE_DTLB,
                                 PERF_COUNT_HW_CACHE_OP_READ,
@@ -53,6 +55,8 @@ void TlbMissCounters::start() noexcept { events_.start(); }
 void TlbMissCounters::stop() noexcept { events_.stop(); }
 
 void TlbMissCounters::apply(MemoryMeasurements &measurements) const noexcept {
+  // Un contador no disponible conserva su estado; su cero no se interpreta como
+  // una medición válida.
   const auto &results = events_.results();
   if (results.size() != 2) {
     measurements.data_tlb_read_status = MemoryMetricStatus::not_measured;

@@ -20,6 +20,12 @@ enum class TimeUnit {
   hours
 };
 
+// Regla concreta que activó la marca de sospecha de una muestra.
+enum class SuspicionReason {
+  none,
+  involuntary_context_switches_exceeded
+};
+
 // Estructura que representa las mediciones de tiempo transcurrido.
 struct ElapsedMeasurements {
   double wall_clock{0.0};
@@ -28,6 +34,8 @@ struct ElapsedMeasurements {
   long voluntary_context_switches{0};
   long involuntary_context_switches{0};
   bool suspicious{false};
+  long involuntary_context_switch_threshold{0};
+  SuspicionReason suspicious_reason{SuspicionReason::none};
 };
 
 enum class MemoryMetricStatus {
@@ -41,11 +49,11 @@ enum class MemoryMetricStatus {
 enum class PeakRssScope { process_lifetime, isolated_measurement_process };
 
 struct MemoryMeasurements {
-  std::uint64_t peak_rss_bytes{0};
-  std::uint64_t minor_page_faults{0};
-  std::uint64_t major_page_faults{0};
-  std::uint64_t data_tlb_read_misses{0};
-  std::uint64_t data_tlb_write_misses{0};
+  std::uint64_t peak_rss_bytes{0}; // ru_maxrss de Linux convertido a bytes.
+  std::uint64_t minor_page_faults{0}; // Delta de ru_minflt.
+  std::uint64_t major_page_faults{0}; // Delta de ru_majflt.
+  std::uint64_t data_tlb_read_misses{0}; // Fallos DTLB en lecturas.
+  std::uint64_t data_tlb_write_misses{0}; // Fallos DTLB en escrituras.
   MemoryMetricStatus peak_rss_status{MemoryMetricStatus::not_measured};
   MemoryMetricStatus data_tlb_read_status{MemoryMetricStatus::not_measured};
   MemoryMetricStatus data_tlb_write_status{MemoryMetricStatus::not_measured};

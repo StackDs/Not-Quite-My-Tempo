@@ -49,8 +49,9 @@ creados por el callback cuando el kernel lo soporta.
 
 Cada instancia acepta un máximo configurable de cambios involuntarios. `elapsed()`
 compara el delta capturado con ese umbral y guarda el resultado en la flag
-`suspicious`. El valor predeterminado es cero. La muestra y sus métricas se
-conservan independientemente de la flag; esta capa no descarta ni repite muestras.
+`suspicious`, el valor del umbral y `suspicious_reason`. El valor predeterminado
+es cero. La muestra y sus métricas se conservan independientemente de la flag;
+esta capa no descarta ni repite muestras.
 
 ## Conversiones
 

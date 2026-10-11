@@ -18,6 +18,7 @@ namespace {
 static_assert(std::is_trivially_copyable<IsolatedMeasurementPayload>::value,
               "El resultado aislado debe poder transferirse por pipe");
 
+// Completa la transferencia aunque write() entregue solo una parte del payload.
 bool write_all(int descriptor, const void *data, std::size_t size) {
   const auto *bytes = static_cast<const char *>(data);
   std::size_t written = 0;
@@ -37,6 +38,7 @@ bool write_all(int descriptor, const void *data, std::size_t size) {
   return true;
 }
 
+// Espera el payload completo, repitiendo la lectura si una señal la interrumpe.
 bool read_all(int descriptor, void *data, std::size_t size, int &error) {
   auto *bytes = static_cast<char *>(data);
   std::size_t received = 0;
@@ -73,6 +75,8 @@ TimeMeasurement TimeMeasurement::measure_in_isolated_process(
         "El máximo de cambios involuntarios no puede ser negativo");
   }
 
+  // El hijo mide una sola ejecución; el padre recibe un payload fijo y recolecta
+  // el proceso antes de devolver el resultado.
   int result_pipe[2];
   if (pipe(result_pipe) == -1) {
     throw std::system_error(errno, std::generic_category(),
@@ -96,6 +100,7 @@ TimeMeasurement TimeMeasurement::measure_in_isolated_process(
       algorithm();
       measurement.stop();
       measurement.elapsed();
+      // Etiqueta el alcance del ru_maxrss antes de enviar ambos bloques de métricas.
       measurement.memory_measurements_.peak_rss_scope =
           PeakRssScope::isolated_measurement_process;
       const linux_metrics::detail::IsolatedMeasurementPayload result{

@@ -15,6 +15,8 @@ HardwareMetricStatus combined_status(HardwareMetricStatus first,
 } // namespace
 
 void calculate_hardware_derived_metrics(HardwareMeasurements &measurements) {
+  // Las razones solo son válidas cuando todos sus contadores están disponibles
+  // y el denominador es distinto de cero.
   if (measurements.cpu_cycles_status != HardwareMetricStatus::available ||
       measurements.instructions_retired_status !=
           HardwareMetricStatus::available) {
