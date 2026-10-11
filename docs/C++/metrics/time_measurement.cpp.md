@@ -23,6 +23,11 @@ desde un lanzador monohilo. Los cambios de memoria del hijo no son visibles para
 el padre. Si el callback lanza una excepción o la medición falla, el hijo
 termina con error y el padre recibe `std::runtime_error`.
 
+Cada instancia acepta un máximo configurable de cambios involuntarios. `elapsed()`
+compara el delta capturado con ese umbral y guarda el resultado en la flag
+`suspicious`. El valor predeterminado es cero. La muestra y sus métricas se
+conservan independientemente de la flag; esta capa no descarta ni repite muestras.
+
 ## Funciones auxiliares
 
 - `to_nanoseconds(seconds, microseconds)`: convierte un delta de CPU capturado
@@ -38,8 +43,11 @@ termina con error y el padre recibe `std::runtime_error`.
   código de `errno`.
 - `measure_in_isolated_process(callback)`: ejecuta el callback en un proceso hijo
   y devuelve una instancia lista para consultar. Envía los deltas en nanosegundos
-  por un pipe y usa `waitpid` para recolectar el proceso hijo. Si el callback
-  falla, el error se reporta en el padre como `std::runtime_error`.
+  por un pipe y usa `waitpid` para recolectar el proceso hijo. Acepta un umbral
+  opcional de cambios involuntarios, que se conserva para clasificar el resultado.
+  Si el callback falla, el error se reporta en el padre como `std::runtime_error`.
+- `TimeMeasurement(max_involuntary_context_switches)`: configura el umbral de
+  cambios involuntarios; rechaza valores negativos con `std::invalid_argument`.
 - `capture_resources()`: llama a `getrusage(RUSAGE_SELF)` y copia los tiempos de
   usuario y sistema, junto con los contadores voluntario e involuntario, en un
   snapshot. Si la llamada falla, lanza `std::system_error` con el código de
@@ -65,7 +73,9 @@ termina con error y el padre recibe `std::runtime_error`.
 - `has_elapsed_`: indica que los deltas están calculados y se pueden consultar.
 - `resources_start_` / `resources_end_`: snapshots de `getrusage` tomados al
   iniciar y detener.
-- `wall_start_` / `wall_end_`: instantes de `steady_clock` que delimitan la
+- `wall_start_` / `wall_end_`: instantes de `CLOCK_MONOTONIC` que delimitan la
   captura.
 - `elapsed_nanoseconds_`: último resultado calculado; conserva los tres tiempos
-  en nanosegundos y los cambios de contexto como conteos.
+  en nanosegundos, los cambios de contexto, y la flag `suspicious`.
+- `max_involuntary_context_switches_`: máximo de cambios involuntarios permitidos
+  antes de marcar el resultado como sospechoso.

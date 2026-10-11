@@ -28,7 +28,10 @@
 
   * *Voluntarios:* El algoritmo cede la CPU intencionalmente.
 
-  * *Involuntarios:* El sistema operativo quita la CPU al proceso (picos altos indican ruido externo y anulan la medición).
+  * *Involuntarios:* El sistema operativo quita la CPU al proceso. Si el contador
+    supera el umbral configurado, la muestra se marca como sospechosa. Se
+    conservan y reportan sus métricas junto con una flag; no se descarta ni se
+    repite automáticamente. El usuario decide cómo tratarla.
 
 ## 3. Métricas de Memoria
 

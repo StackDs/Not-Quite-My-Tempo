@@ -41,11 +41,14 @@ Estructura que contiene los valores calculados:
 - `cpu_system`: tiempo de CPU empleado por el kernel.
 - `voluntary_context_switches`: cambios de contexto voluntarios.
 - `involuntary_context_switches`: cambios de contexto involuntarios.
+- `suspicious`: indica si los cambios involuntarios superaron el umbral
+  configurado.
 
 Los tres campos de tiempo son `double` y están expresados en la unidad pedida.
 Los tres tiempos devueltos por una misma llamada comparten la unidad indicada
 en `obtain_elapsed()`. Los cambios de contexto son conteos `long` y no se
 convierten; la unidad se conoce por el argumento pasado a ese método.
+`suspicious` tampoco depende de la unidad: es una flag booleana del resultado.
 
 ## `TimeMeasurement`
 
@@ -66,7 +69,7 @@ conservan internamente en nanosegundos y se convierten al pedir el resultado:
 const ntq::TimeMeasurement isolated =
     ntq::TimeMeasurement::measure_in_isolated_process([] {
       // Ejecutar el algoritmo.
-    });
+    }, 1); // Permitir como máximo un cambio involuntario.
 
 const ntq::ElapsedMeasurements in_microseconds =
     isolated.obtain_elapsed(ntq::TimeUnit::microseconds);
@@ -76,7 +79,13 @@ const ntq::ElapsedMeasurements in_seconds =
 
 El proceso que lo invoca debe ser monohilo. El estado de memoria modificado en
 el hijo no se refleja en el padre; solo se devuelven las métricas. Los efectos
-externos, como escribir en un archivo, sí pueden persistir.
+externos, como escribir en un archivo, sí pueden persistir. Si no se pasa un
+umbral, se usa cero y cualquier cambio involuntario marca el resultado como
+sospechoso.
+
+También se puede configurar el umbral para el flujo manual mediante el
+constructor `TimeMeasurement(max_involuntary_context_switches)`. Un umbral
+negativo lanza `std::invalid_argument`.
 
 ```cpp
 #include "metrics/time_measurement.hpp"
@@ -107,16 +116,22 @@ debe conservar la unidad que solicitó para interpretar los tres campos.
   medición. Si la consulta del sistema falla, lanza `std::system_error`.
 - `measure_in_isolated_process(callback)`: ejecuta el callback en un proceso
   hijo dedicado y devuelve una instancia lista para consultar con
-  `obtain_elapsed(unit)`. Los tiempos se conservan en nanosegundos hasta que se
-  solicita una unidad. Lanza `std::system_error` si fallan las operaciones POSIX
-  de proceso o comunicación, y `std::runtime_error` si el callback o la medición
-  falla en el hijo. No debe invocarse desde un proceso multihilo.
+  `obtain_elapsed(unit)`. El argumento opcional `max_involuntary_context_switches`
+  establece el umbral para la flag `suspicious` y vale cero por defecto. Los
+  tiempos se conservan en nanosegundos hasta que se solicita una unidad. Lanza
+  `std::system_error` si fallan las operaciones POSIX de proceso o comunicación,
+  y `std::runtime_error` si el callback o la medición falla en el hijo. No debe
+  invocarse desde un proceso multihilo.
+- `TimeMeasurement(max_involuntary_context_switches)`: configura el umbral del
+  flujo manual; el valor por defecto es cero. Un valor negativo lanza
+  `std::invalid_argument`.
 - `start()`: captura los valores iniciales y marca la instancia como activa.
   Llamarlo de nuevo reinicia el ciclo y descarta resultados anteriores.
 - `stop()`: captura los valores finales y marca la instancia como detenida.
 - `elapsed()`: calcula y almacena los deltas desde `start()` hasta `stop()`.
 - `obtain_elapsed(TimeUnit unit) const`: devuelve los resultados calculados,
-  convirtiendo los tres tiempos a `unit` y conservando los conteos de contexto.
+  convirtiendo los tres tiempos a `unit` y conservando los contadores y la flag
+  `suspicious`.
   No cambia ni consume el resultado almacenado, así que se puede consultar en
   otra unidad después; los campos del resultado retornado no incluyen la unidad.
 

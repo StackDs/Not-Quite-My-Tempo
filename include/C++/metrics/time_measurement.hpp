@@ -23,11 +23,16 @@ struct ElapsedMeasurements {
   double cpu_system{0.0};
   long voluntary_context_switches{0};
   long involuntary_context_switches{0};
+  bool suspicious{false};
 };
 
 // Clase que permite medir el tiempo transcurrido y las métricas de recursos.
 class TimeMeasurement {
 public:
+  // El umbral es el máximo de cambios involuntarios permitidos antes de marcar
+  // el resultado como sospechoso. El valor predeterminado estricto es cero.
+  explicit TimeMeasurement(long max_involuntary_context_switches = 0);
+
   // Devuelve la resolución reportada por Linux para CLOCK_MONOTONIC, en
   // nanosegundos. El mismo reloj se usa para medir el wall-clock.
   static std::chrono::nanoseconds reported_clock_resolution();
@@ -36,7 +41,8 @@ public:
   // lanzador debe ser monohilo al invocar este método; los cambios en memoria
   // hechos por el hijo no se reflejan en el proceso padre.
   static TimeMeasurement measure_in_isolated_process(
-      const std::function<void()> &algorithm);
+      const std::function<void()> &algorithm,
+      long max_involuntary_context_switches = 0);
 
   void start();
   void stop();
@@ -63,6 +69,7 @@ private:
   ResourceSnapshot resources_start_{};
   ResourceSnapshot resources_end_{};
   ElapsedMeasurements elapsed_nanoseconds_{};
+  long max_involuntary_context_switches_{0};
   bool is_running_{false};
   bool has_stopped_{false};
   bool has_elapsed_{false};

@@ -104,10 +104,23 @@ std::chrono::nanoseconds TimeMeasurement::reported_clock_resolution() {
          std::chrono::nanoseconds{resolution.tv_nsec};
 }
 
+TimeMeasurement::TimeMeasurement(long max_involuntary_context_switches)
+    : max_involuntary_context_switches_(max_involuntary_context_switches) {
+  if (max_involuntary_context_switches_ < 0) {
+    throw std::invalid_argument(
+        "El máximo de cambios involuntarios no puede ser negativo");
+  }
+}
+
 TimeMeasurement TimeMeasurement::measure_in_isolated_process(
-    const std::function<void()> &algorithm) {
+    const std::function<void()> &algorithm,
+    long max_involuntary_context_switches) {
   if (!algorithm) {
     throw std::invalid_argument("El algoritmo a medir no puede estar vacío");
+  }
+  if (max_involuntary_context_switches < 0) {
+    throw std::invalid_argument(
+        "El máximo de cambios involuntarios no puede ser negativo");
   }
 
   int result_pipe[2];
@@ -128,7 +141,7 @@ TimeMeasurement TimeMeasurement::measure_in_isolated_process(
   if (child == 0) {
     close(result_pipe[0]);
     try {
-      TimeMeasurement measurement;
+      TimeMeasurement measurement(max_involuntary_context_switches);
       measurement.start();
       algorithm();
       measurement.stop();
@@ -146,9 +159,8 @@ TimeMeasurement TimeMeasurement::measure_in_isolated_process(
   close(result_pipe[1]);
   ElapsedMeasurements elapsed_nanoseconds{};
   int read_error = 0;
-  const bool received =
-      read_all(result_pipe[0], &elapsed_nanoseconds,
-               sizeof(elapsed_nanoseconds), read_error);
+  const bool received = read_all(result_pipe[0], &elapsed_nanoseconds,
+                                 sizeof(elapsed_nanoseconds), read_error);
   close(result_pipe[0]);
 
   int child_status = 0;
@@ -179,7 +191,7 @@ TimeMeasurement TimeMeasurement::measure_in_isolated_process(
         "El proceso aislado terminó con error después de medir");
   }
 
-  TimeMeasurement measurement;
+  TimeMeasurement measurement(max_involuntary_context_switches);
   measurement.elapsed_nanoseconds_ = elapsed_nanoseconds;
   measurement.has_stopped_ = true;
   measurement.has_elapsed_ = true;
@@ -258,14 +270,18 @@ void TimeMeasurement::elapsed() {
   const long system_microseconds =
       resources_end_.system_microseconds - resources_start_.system_microseconds;
 
+  const long involuntary_context_switches =
+      resources_end_.involuntary_context_switches -
+      resources_start_.involuntary_context_switches;
+
   elapsed_nanoseconds_ = {
       static_cast<double>(wall_duration.count()),
       static_cast<double>(to_nanoseconds(user_seconds, user_microseconds)),
       static_cast<double>(to_nanoseconds(system_seconds, system_microseconds)),
       resources_end_.voluntary_context_switches -
           resources_start_.voluntary_context_switches,
-      resources_end_.involuntary_context_switches -
-          resources_start_.involuntary_context_switches,
+      involuntary_context_switches,
+      involuntary_context_switches > max_involuntary_context_switches_,
   };
   has_elapsed_ = true;
 }
@@ -286,6 +302,7 @@ ElapsedMeasurements TimeMeasurement::obtain_elapsed(TimeUnit unit) const {
       elapsed_nanoseconds_.cpu_system / divisor,
       elapsed_nanoseconds_.voluntary_context_switches,
       elapsed_nanoseconds_.involuntary_context_switches,
+      elapsed_nanoseconds_.suspicious,
   };
 }
 
