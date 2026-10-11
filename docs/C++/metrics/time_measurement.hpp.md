@@ -5,7 +5,16 @@ Namespace: `ntq`
 
 Este header declara la API pública para medir una sección de código y obtener
 tiempo de pared, tiempo de CPU del proceso y cambios de contexto. La captura de
-CPU y cambios de contexto está implementada para Linux.
+CPU, cambios de contexto y resolución reportada del reloj está implementada para
+Linux.
+
+## Resolución del reloj
+
+`TimeMeasurement::reported_clock_resolution()` devuelve, en nanosegundos, la
+resolución que Linux reporta para `CLOCK_MONOTONIC`. En las implementaciones
+Linux habituales, `std::chrono::steady_clock` se apoya en ese reloj. Este valor
+describe la resolución reportada por el sistema; no garantiza la precisión de
+cada medición ni mide empíricamente la granularidad observada.
 
 ## `TimeUnit`
 
@@ -72,6 +81,9 @@ debe conservar la unidad que solicitó para interpretar los tres campos.
 
 ### Métodos
 
+- `reported_clock_resolution()`: consulta la resolución reportada de
+  `CLOCK_MONOTONIC`. Es un método estático y puede invocarse sin iniciar una
+  medición. Si la consulta del sistema falla, lanza `std::system_error`.
 - `start()`: captura los valores iniciales y marca la instancia como activa.
   Llamarlo de nuevo reinicia el ciclo y descarta resultados anteriores.
 - `stop()`: captura los valores finales y marca la instancia como detenida.

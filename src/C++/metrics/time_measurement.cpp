@@ -4,6 +4,7 @@
 #include <stdexcept>
 #include <sys/resource.h>
 #include <system_error>
+#include <time.h>
 
 namespace ntq {
 namespace {
@@ -35,6 +36,18 @@ double nanoseconds_per_unit(TimeUnit unit) {
 }
 
 } // namespace
+
+// Consulta la resolución reportada para el reloj monotónico de Linux.
+std::chrono::nanoseconds TimeMeasurement::reported_clock_resolution() {
+  timespec resolution{};
+  if (clock_getres(CLOCK_MONOTONIC, &resolution) == -1) {
+    throw std::system_error(errno, std::generic_category(),
+                            "No fue posible consultar la resolución del reloj");
+  }
+
+  return std::chrono::seconds{resolution.tv_sec} +
+         std::chrono::nanoseconds{resolution.tv_nsec};
+}
 
 // Capturamos los recursos del proceso utilizando getrusage.
 TimeMeasurement::ResourceSnapshot TimeMeasurement::capture_resources() {

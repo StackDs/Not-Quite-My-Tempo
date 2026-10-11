@@ -27,6 +27,11 @@ struct ElapsedMeasurements {
 // Clase que permite medir el tiempo transcurrido y las métricas de recursos.
 class TimeMeasurement {
 public:
+  // Devuelve la resolución reportada por Linux para CLOCK_MONOTONIC, en
+  // nanosegundos. En las implementaciones Linux habituales, steady_clock usa
+  // este reloj.
+  static std::chrono::nanoseconds reported_clock_resolution();
+
   void start();
   void stop();
   void elapsed();

@@ -10,6 +10,11 @@ proceso. `getrusage` reporta tiempo de CPU en segundos y microsegundos. La fase
 llamada a `obtain_elapsed(unit)` convierte los tres tiempos juntos a la unidad
 solicitada.
 
+`reported_clock_resolution()` consulta `clock_getres(CLOCK_MONOTONIC)` y devuelve
+la resolución reportada por Linux en nanosegundos. En las implementaciones Linux
+habituales, `steady_clock` utiliza `CLOCK_MONOTONIC`; la consulta no calibra la
+granularidad observada empíricamente.
+
 ## Funciones auxiliares
 
 - `to_nanoseconds(seconds, microseconds)`: convierte un delta de CPU capturado
@@ -20,6 +25,9 @@ solicitada.
 
 ## Funciones de `TimeMeasurement`
 
+- `reported_clock_resolution()`: consulta la resolución reportada para
+  `CLOCK_MONOTONIC`. Si `clock_getres` falla, lanza `std::system_error` con el
+  código de `errno`.
 - `capture_resources()`: llama a `getrusage(RUSAGE_SELF)` y copia los tiempos de
   usuario y sistema, junto con los contadores voluntario e involuntario, en un
   snapshot. Si la llamada falla, lanza `std::system_error` con el código de
