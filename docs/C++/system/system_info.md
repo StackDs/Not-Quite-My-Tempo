@@ -5,9 +5,12 @@ Implementación Linux: `src/C++/system/linux/`
 Namespace: `ntq`
 
 La implementación está separada por responsabilidad: `system_info.cpp` coordina;
-`cpu_info_collector.cpp` y `cgroup_info_collector.cpp` recolectan cada dominio;
-`cpu_parsers.cpp` y `cgroup_parsers.cpp` procesan sus formatos; `text_parsers.cpp`
-y `file_reader.cpp` ofrecen utilidades compartidas de texto y lectura.
+`cpu_info_collector.cpp` recolecta CPU; `cgroup_info_collector.cpp` detecta y
+despacha a los recolectores cgroup v1/v2; `cgroup_v1_collector.cpp` y
+`cgroup_v2_collector.cpp` leen sus límites; `cgroup_collector_common.cpp`
+contiene resolución compartida de mounts/rutas; `cpu_parsers.cpp` y
+`cgroup_parsers.cpp` procesan sus formatos; `text_parsers.cpp` y `file_reader.cpp`
+ofrecen utilidades compartidas de texto y lectura.
 
 `collect_system_info()` devuelve hardware, estado de CPU, propiedades detectables
 del compilador y límites del sandbox/cgroup en una instancia de `SystemInfo`.
@@ -98,6 +101,9 @@ g++ -std=c++14 -Wall -Wextra -Wpedantic -Werror \
   src/C++/system/linux/cgroup_parsers.cpp \
   src/C++/system/linux/file_reader.cpp \
   src/C++/system/linux/cpu_info_collector.cpp \
+  src/C++/system/linux/cgroup_collector_common.cpp \
+  src/C++/system/linux/cgroup_v1_collector.cpp \
+  src/C++/system/linux/cgroup_v2_collector.cpp \
   src/C++/system/linux/cgroup_info_collector.cpp \
   src/C++/system/linux/system_info.cpp \
   -o /tmp/system_info_tests

@@ -1,7 +1,9 @@
 # Estadísticas de mediciones
 
 API: `include/C++/statistics/statistics.hpp`  
-Implementación: `src/C++/statistics/`  
+Implementación: `src/C++/statistics/`; `statistics_validation.cpp` valida e
+indexa muestras, `statistics_preparation.cpp` prepara warm-ups/filtros/auditoría,
+y `statistics.cpp` agrega resúmenes y arma el reporte.
 Namespace: `ntq::statistics`
 
 `calculate_statistics()` consume mediciones que ya se ejecutaron. No ejecuta el
@@ -117,6 +119,8 @@ g++ -std=c++14 -Wall -Wextra -Wpedantic -Werror \
   -Iinclude/C++ -Isrc/C++/statistics \
   tests/C++/statistics/statistics_tests.cpp \
   src/C++/statistics/statistics.cpp \
+  src/C++/statistics/statistics_validation.cpp \
+  src/C++/statistics/statistics_preparation.cpp \
   src/C++/statistics/environment_diagnostics.cpp \
   src/C++/statistics/metric_values.cpp \
   src/C++/statistics/quantiles.cpp \
