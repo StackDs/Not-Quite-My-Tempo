@@ -18,12 +18,32 @@ namespace ntq {
 namespace data {
 
 enum class DuplicatePolicy { allow, forbid };
-enum class DataPattern { random, sorted, reversed, nearly_sorted, repeated };
+enum class DataPattern {
+  random,
+  sorted,
+  reversed,
+  nearly_sorted,
+  repeated,
+  ordered_blocks,
+  alternating_blocks,
+  sawtooth,
+  low_high_alternating,
+  rotated,
+  few_out_of_place,
+  grouped_by_value,
+  partial_key
+};
 
 struct GenerationOptions {
   DuplicatePolicy duplicates{DuplicatePolicy::allow};
   DataPattern pattern{DataPattern::random};
   std::size_t max_attempts{10000};
+  std::size_t block_size{16};
+  std::size_t sawtooth_run_length{16};
+  std::size_t nearly_sorted_swaps{0}; // Zero selects max(1, count / 10).
+  std::size_t out_of_place_count{1};
+  std::size_t rotation_offset{1};
+  double partial_key_width{1.0};
 };
 
 inline std::uint64_t generate_seed() {
@@ -68,11 +88,28 @@ inline void validate_pattern_options(const GenerationOptions &options) {
     throw std::invalid_argument(
         "repeated pattern is incompatible with DuplicatePolicy::forbid");
   }
+  if ((options.pattern == DataPattern::ordered_blocks ||
+       options.pattern == DataPattern::alternating_blocks) &&
+      options.block_size == 0) {
+    throw std::invalid_argument("block_size must be greater than zero");
+  }
+  if (options.pattern == DataPattern::sawtooth &&
+      options.sawtooth_run_length == 0) {
+    throw std::invalid_argument(
+        "sawtooth_run_length must be greater than zero");
+  }
+  if (options.pattern == DataPattern::partial_key &&
+      (!std::isfinite(options.partial_key_width) ||
+       options.partial_key_width <= 0.0)) {
+    throw std::invalid_argument(
+        "partial_key_width must be finite and greater than zero");
+  }
 }
 
 template <typename T>
-void apply_pattern(std::vector<T> &values, DataPattern pattern,
+void apply_pattern(std::vector<T> &values, const GenerationOptions &options,
                    std::mt19937_64 &engine) {
+  const DataPattern pattern = options.pattern;
   if (pattern == DataPattern::sorted) {
     std::sort(values.begin(), values.end());
   } else if (pattern == DataPattern::reversed) {
@@ -83,12 +120,92 @@ void apply_pattern(std::vector<T> &values, DataPattern pattern,
       return;
     }
     std::uniform_int_distribution<std::size_t> index(0, values.size() - 1);
-    const std::size_t swaps = (std::max)(std::size_t{1}, values.size() / 10);
+    const std::size_t swaps =
+        options.nearly_sorted_swaps == 0
+            ? (std::max)(std::size_t{1}, values.size() / 10)
+            : options.nearly_sorted_swaps;
     for (std::size_t swap = 0; swap < swaps; ++swap) {
       const std::size_t first = index(engine);
       const std::size_t second = index(engine);
       std::swap(values[first], values[second]);
     }
+  } else if (pattern == DataPattern::ordered_blocks ||
+             pattern == DataPattern::alternating_blocks) {
+    std::size_t block_index = 0;
+    for (std::size_t first = 0; first < values.size(); ++block_index) {
+      const std::size_t block_length =
+          (std::min)(options.block_size, values.size() - first);
+      const std::size_t last = first + block_length;
+      if (pattern == DataPattern::ordered_blocks || block_index % 2 == 0) {
+        std::sort(values.begin() + first, values.begin() + last);
+      } else {
+        std::sort(values.begin() + first, values.begin() + last,
+                  std::greater<T>());
+      }
+      first = last;
+    }
+  } else if (pattern == DataPattern::sawtooth) {
+    std::sort(values.begin(), values.end());
+    std::vector<T> arranged;
+    arranged.reserve(values.size());
+    for (std::size_t run = 0;
+         run < (std::min)(options.sawtooth_run_length, values.size()); ++run) {
+      for (std::size_t index = run; index < values.size();) {
+        arranged.push_back(values[index]);
+        if (values.size() - index <= options.sawtooth_run_length) {
+          break;
+        }
+        index += options.sawtooth_run_length;
+      }
+    }
+    values.swap(arranged);
+  } else if (pattern == DataPattern::low_high_alternating) {
+    std::sort(values.begin(), values.end());
+    std::vector<T> arranged;
+    arranged.reserve(values.size());
+    std::size_t low = 0;
+    std::size_t high = values.size();
+    while (low < high) {
+      arranged.push_back(values[low++]);
+      if (low < high) {
+        arranged.push_back(values[--high]);
+      }
+    }
+    values.swap(arranged);
+  } else if (pattern == DataPattern::rotated) {
+    std::sort(values.begin(), values.end());
+    if (!values.empty()) {
+      const std::size_t offset = options.rotation_offset % values.size();
+      std::rotate(values.begin(), values.begin() + offset, values.end());
+    }
+  } else if (pattern == DataPattern::few_out_of_place) {
+    std::sort(values.begin(), values.end());
+    if (values.size() <= 1) {
+      return;
+    }
+    std::uniform_int_distribution<std::size_t> source_index(0,
+                                                            values.size() - 1);
+    const std::size_t moves =
+        (std::min)(options.out_of_place_count, values.size());
+    for (std::size_t move = 0; move < moves && values.size() > 1; ++move) {
+      const std::size_t from = source_index(engine);
+      const T value = values[from];
+      values.erase(values.begin() + from);
+      std::uniform_int_distribution<std::size_t> destination_index(
+          0, values.size() - 1);
+      const std::size_t raw_destination = destination_index(engine);
+      const std::size_t destination =
+          raw_destination >= from ? raw_destination + 1 : raw_destination;
+      values.insert(values.begin() + destination, value);
+    }
+  } else if (pattern == DataPattern::grouped_by_value) {
+    std::stable_sort(values.begin(), values.end());
+  } else if (pattern == DataPattern::partial_key) {
+    const long double width = options.partial_key_width;
+    std::stable_sort(values.begin(), values.end(), [width](T left, T right) {
+      return std::floor(static_cast<long double>(left) / width) <
+             std::floor(static_cast<long double>(right) / width);
+    });
   }
 }
 
@@ -142,7 +259,7 @@ std::vector<T> draw_values(std::size_t count, Distribution distribution,
     }
   }
 
-  apply_pattern(values, options.pattern, engine);
+  apply_pattern(values, options, engine);
   return values;
 }
 
